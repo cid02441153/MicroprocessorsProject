@@ -2,7 +2,7 @@
 
 extrn	DAC_Setup, DAC_Int_Hi
     
-psect data_acs
+psect udata_acs
 delay_count: ds 1
 delay_count_2: ds 1
 delay_count_3: ds 1
@@ -23,7 +23,7 @@ start:
 loop: 
     ; 'read in' accelerometer value
     ; at the moment hard coded into ACCEL_X_H, ACCEL_X_L
-    movlw 0x30
+    movlw 0x7F
     movwf ACCEL_X_H
     
     movlw 0xFF
@@ -39,7 +39,7 @@ loop:
     addwfc ACCEL_X_L, F
     
     ; Move Motor
-    call move_motor
+    ;call move_motor
     
     ;call move_left
     ;call move_centre
@@ -48,14 +48,18 @@ loop:
     bra loop 
     
 move_motor:
-    movf ACCEL_X_L, W
-    cpfsgt TMR0L
-    return
-    
+    ; High byte first
     movf ACCEL_X_H, W
-    cpfsgt  TMR0H ; compare w and f, skip if greater than 
+    cpfsgt TMR0H            ; skip if TMR0H > ACCEL_X_H
+    bra check_low
+    bcf PORTD, 2, A         ; TMR0H > ACCEL_X_H, clear pin
     return
-    
+check_low:
+    cpfseq TMR0H            ; skip if TMR0H == ACCEL_X_H
+    return                  ; TMR0H < ACCEL_X_H, not yet
+    movf ACCEL_X_L, W
+    cpfsgt TMR0L            ; skip if TMR0L > ACCEL_X_L
+    return
     bcf PORTD, 2, A
     return
     

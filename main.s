@@ -35,10 +35,10 @@ start:
 loop: 
     ; 'read in' accelerometer value
     ; at the moment hard coded into ACCEL_X_H, ACCEL_X_L
-    movlw 0x80
+    movlw 0x7f
     movwf TEMP_H
     
-    movlw 0x00
+    movlw 0xff
     movwf TEMP_L
     
     call convert_tilt ; divide value by 16
