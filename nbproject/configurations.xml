@@ -19,6 +19,7 @@
                    projectFiles="true">
       <itemPath>main.s</itemPath>
       <itemPath>config.s</itemPath>
+      <itemPath>DAC_Interrupt.s</itemPath>
     </logicalFolder>
   </logicalFolder>
   <projectmakefile>Makefile</projectmakefile>
