@@ -24,6 +24,8 @@ Setup_Accel:
 
     call Wake_Accel
     call Enable_Increment
+    
+    banksel 0
     return
 
 Wake_Accel:
@@ -77,6 +79,8 @@ Read_Accel:
 
     banksel LATD
     bsf LATD, 0, b      ; CS high
+    
+    banksel 0
     return
 
 ; SPI exchange - copied exactly from working code

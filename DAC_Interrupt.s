@@ -32,10 +32,10 @@ DAC_Setup:
 timer_reset: ; Set the timer to a given number rather than 0
     ; Value of 0x63AC -> 0xFFFF -> 20ms cycle
     movlw 0x63
-    movwf TMR0H
+    movwf TMR0H, A
     
     movlw 0xAC
-    movwf TMR0L
+    movwf TMR0L, A
     
     return
 	
