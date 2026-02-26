@@ -1,183 +1,165 @@
 #include <xc.inc>
 
-extrn	DAC_Setup, DAC_Int_Hi
-    
-psect data_acs
-delay_count: ds 1
-delay_count_2: ds 1
-delay_count_3: ds 1
-ACCEL_X_L: ds 1
-ACCEL_X_H: ds 1
-ACCEL_Y_L: ds 1
-ACCEL_Y_H: ds 1
-TEMP_H: ds 1
-TEMP_L: ds 1
-DEFAULT_H: ds 1
-DEFAULT_L: ds 1
-counter:    ds 1
-    
-psect	code, abs
-rst:	org	0x0000	; reset vector
-	goto	start
+ANCON3 equ 0xF4A
 
-int_hi:	org	0x0008	; high vector, no low vector
-	goto	DAC_Int_Hi
-	
-start:	
-    call	DAC_Setup
-    
+global ACCEL_X_L, ACCEL_X_H, ACCEL_Y_L, ACCEL_Y_H
+extrn  Setup_Accel, Read_Accel
+extrn  DAC_Setup, DAC_Int_Hi
+
+psect udata_acs
+ACCEL_X_L:  ds 1
+ACCEL_X_H:  ds 1
+ACCEL_Y_L:  ds 1
+ACCEL_Y_H:  ds 1
+TEMP_H:     ds 1
+TEMP_L:     ds 1
+DEFAULT_H:  ds 1
+DEFAULT_L:  ds 1
+counter:    ds 1
+
+psect code, abs
+rst:    org 0x0000
+        goto start
+
+int_hi: org 0x0008          ; high priority interrupt vector
+        goto DAC_Int_Hi
+
+start:
+    ; 16MHz internal oscillator
+    banksel OSCCON
+    movlw 0x70
+    movwf OSCCON, b
+
+    ; Disable all analog inputs
+    banksel ANCON3
+    clrf ANCON3, b
+    banksel ANCON0
+    clrf ANCON0, b
+    clrf ANCON1, b
+    clrf ANCON2, b
+
+    ; Port E - output (X accel display)
+    clrf TRISE, A
+    clrf LATE, A
+
+    ; Port F - output (Y accel display)
+    clrf TRISF, A
+    clrf LATF, A
+
+    ; Port J - output (debug counter)
+    clrf TRISJ, A
+    clrf LATJ, A
+
+    ; Port D - direction set by Setup_Accel, zero lats first
+    clrf TRISD, A
+    clrf LATD, A
+
+    call Setup_Accel
+    call DAC_Setup
+
+    ; Centre position PWM value = 1.5ms = 0x6F66
     movlw 0x6F
-    movwf DEFAULT_H, A
-    
+    movwf DEFAULT_H, c
+
     movlw 0x66
-    movwf DEFAULT_L, A
+    movwf DEFAULT_L, c
+
+loop:
+    call Read_Accel
     
-loop: 
-    ; 'read in' accelerometer value
-    ; at the moment hard coded into ACCEL_X_H, ACCEL_X_L
     movlw 0x80
-    movwf TEMP_H
-    
+    movwf ACCEL_X_H, A
     movlw 0x00
-    movwf TEMP_L
-    
-    call convert_tilt ; divide value by 16
-    
-    ; Store into appropriate X variables
-    movff TEMP_H, ACCEL_X_H
-    movff TEMP_L, ACCEL_X_L
-    
-    ; Y tilt
-    movlw 0x80
-    movwf TEMP_H
-    
-    movlw 0x00
-    movwf TEMP_L
-   
-    call convert_tilt ; divide value by 16
-    
-    ; Store into appropriate Y variables
-    movff TEMP_H, ACCEL_Y_H
-    movff TEMP_L, ACCEL_Y_L
-    
-    ; Move Motor
+    movwf ACCEL_X_L, A
+
+    ; Convert X and drive motor X (RD2)
+    movff ACCEL_X_L, TEMP_L
+    movff ACCEL_X_H, TEMP_H
+    call convert_tilt
     call move_motor_X
+
+    ; Convert Y and drive motor Y (RD3)
+    movff ACCEL_Y_L, TEMP_L
+    movff ACCEL_Y_H, TEMP_H
+    call convert_tilt
     call move_motor_Y
-    
-    ;call move_left
-    ;call move_centre
-    ;call move_right
-   
-    bra loop 
-    
+
+    ; Display raw high bytes on LEDs
+    movf ACCEL_X_H, W, c
+    movwf LATE, A
+
+    movf ACCEL_Y_H, W, c
+    movwf LATF, A
+
+    bra loop
+
+; --- Motor control ---
+; The interrupt sets RD2/RD3 high at the start of each 20ms cycle.
+; move_motor_X/Y clear the pin once the timer exceeds the pulse width
+; stored in TEMP_H:TEMP_L by convert_tilt.
+;
+; 16-bit comparison: check high byte first.
+; If TMR0H > TEMP_H  -> clear pin immediately
+; If TMR0H == TEMP_H -> check low byte
+; If TMR0H < TEMP_H  -> not yet, return
+
 move_motor_X:
-    movf ACCEL_X_L, W
-    cpfsgt TMR0L
+    movf TEMP_H, W, c
+    cpfsgt TMR0H            ; skip if TMR0H > TEMP_H
+    bra check_low_X
+    bcf LATD, 2, A          ; TMR0H > TEMP_H, clear pin now
     return
-    
-    movf ACCEL_X_H, W
-    cpfsgt  TMR0H ; compare w and f, skip if greater than 
+check_low_X:
+    cpfseq TMR0H            ; skip if TMR0H == TEMP_H
+    return                  ; TMR0H < TEMP_H, not yet
+    movf TEMP_L, W, c
+    cpfsgt TMR0L            ; skip if TMR0L > TEMP_L
     return
-    
-    bcf PORTD, 2, A
+    bcf LATD, 2, A
     return
 
 move_motor_Y:
-    movf ACCEL_Y_L, W
+    movf TEMP_H, W, c
+    cpfsgt TMR0H
+    bra check_low_Y
+    bcf LATD, 3, A
+    return
+check_low_Y:
+    cpfseq TMR0H
+    return
+    movf TEMP_L, W, c
     cpfsgt TMR0L
     return
-    
-    movf ACCEL_Y_H, W
-    cpfsgt  TMR0H ; compare w and f, skip if greater than 
-    return
-    
-    bcf PORTD, 3, A
-    return
-    
-    
-move_left: ; 2.5ms - 0x7737
-    movlw 0x37
-    cpfsgt TMR0L
-    return
-    
-    movlw 0x77
-    cpfsgt  TMR0H ; compare w and f, skip if greater than 
-    return
-    
-    bcf PORTD, 2, A
-    return
-    
-move_centre: ; 1.5ms - 0x6F66
-    movlw 0x66
-    cpfsgt TMR0L
-    return
-    
-    movlw 0x6F
-    cpfsgt  TMR0H ; compare w and f, skip if greater than 
-    return
-    
-    bcf LATD, 2, A
-    return
-    
-move_right: ; 0.5ms - 0x6794
-    movlw 0x94
-    cpfsgt TMR0L
-    return
-    
-    movlw 0x67
-    cpfsgt  TMR0H ; compare w and f, skip if greater than 
-    return
-    
-    bcf LATD, 2, A
+    bcf LATD, 3, A
     return
 
-; Divides value by 16 to be in range of servo
+; --- Convert tilt to pulse width ---
+; Arithmetic right-shifts TEMP_H:TEMP_L by 4 (divide by 16)
+; then adds DEFAULT_H:DEFAULT_L (centre position = 0x6F66)
+; Result is a timer compare value for the pulse width
+
 convert_tilt:
     movlw 0x04
-    movwf counter
+    movwf counter, c
 shift_loop:
-    bcf	STATUS, 0
-    btfsc TEMP_H, 7
-    bsf	STATUS, 0
-    
-    ; Rotate high byte
-    rrcf TEMP_H, F
-    
-    ; Rotate low byte
-    rrcf TEMP_L, F
-    
-    ; Repeat 4 times for a shift of 4
-    decfsz counter, F
+    ; Preserve sign bit through shift
+    bcf  STATUS, 0, A
+    btfsc TEMP_H, 7, c
+    bsf  STATUS, 0, A
+
+    rrcf TEMP_H, F, c
+    rrcf TEMP_L, F, c
+
+    decfsz counter, F, c
     bra shift_loop
-    
-    ; Add default value
-    movf DEFAULT_H, W, A
-    addwf TEMP_H, F
-    
-    movf DEFAULT_L, W, A
-    addwfc TEMP_L, F
-    
-    return
-    
-delay:
-    movlw 0xFF
-    movwf delay_count
-delayouter:
-    movlw 0xFF
-    movwf delay_count_2
-delayinner_1:
-    movlw 0xFF
-    movwf delay_count_3
-delayinner_2:
-    decfsz delay_count_3, F
-    bra delayinner_2
-    
-    decfsz delay_count_2, F
-    bra delayinner_1
-    
-    decfsz delay_count, F
-    bra delayouter
-    
+
+    ; Add centre offset - low byte first so carry propagates correctly
+    movf DEFAULT_L, W, c
+    addwf TEMP_L, F, c
+
+    movf DEFAULT_H, W, c
+    addwfc TEMP_H, F, c
+
     return
 
-	end	rst
+    end rst

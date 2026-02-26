@@ -20,6 +20,8 @@
       <itemPath>main.s</itemPath>
       <itemPath>config.s</itemPath>
       <itemPath>DAC_Interrupt.s</itemPath>
+      <itemPath>SPI.s</itemPath>
+      <itemPath>accel.s</itemPath>
     </logicalFolder>
   </logicalFolder>
   <projectmakefile>Makefile</projectmakefile>
