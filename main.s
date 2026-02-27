@@ -4,6 +4,7 @@ global ACCEL_X_H, ACCEL_X_L, ACCEL_Y_H, ACCEL_Y_L
     
 extrn	DAC_Setup, DAC_Int_Hi
 extrn	Setup_Accel, Read_Accel
+extrn	UART_Setup, UART_Transmit_Message
     
 psect udata_acs
 delay_count: ds 1
@@ -20,6 +21,7 @@ TEMP_L: ds 1
 DEFAULT_H: ds 1
 DEFAULT_L: ds 1
 counter:    ds 1
+UART_counter: ds 1
     
 psect	code, abs
 rst:	org	0x0000	; reset vector
@@ -40,6 +42,9 @@ start:
     movlw 0x66
     movwf DEFAULT_L, A
     
+    movlw 0xFF
+    movwf UART_counter, A
+    
     clrf TRISE, A
     clrf LATE
     
@@ -49,6 +54,7 @@ start:
     clrf TRISD, A
     clrf LATD
     
+    call	UART_Setup
     call	Setup_Accel
     call	DAC_Setup
    
@@ -56,6 +62,17 @@ start:
 loop:
     call Read_Accel
 
+    decfsz UART_counter, A
+    bra skip_UART
+    
+    movlw 0xFF
+    movwf UART_counter
+    
+    lfsr 2, ACCEL_X_H
+    movlw 0x01
+    call UART_Transmit_Message
+    
+skip_UART:
     ; Load new X sample into TEMP
     movff ACCEL_X_H, TEMP_H
     movff ACCEL_X_L, TEMP_L

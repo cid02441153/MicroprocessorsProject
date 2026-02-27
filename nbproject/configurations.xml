@@ -22,6 +22,7 @@
       <itemPath>DAC_Interrupt.s</itemPath>
       <itemPath>SPI.s</itemPath>
       <itemPath>accel.s</itemPath>
+      <itemPath>UART.s</itemPath>
     </logicalFolder>
   </logicalFolder>
   <projectmakefile>Makefile</projectmakefile>
