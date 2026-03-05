@@ -63,19 +63,19 @@ Read_Accel:
 
     movlw 0x00
     call SPI_Xchg
-    movwf ACCEL_X_L, c
+    movwf ACCEL_X_L, A
 
     movlw 0x00
     call SPI_Xchg
-    movwf ACCEL_X_H, c
+    movwf ACCEL_X_H, A
 
     movlw 0x00
     call SPI_Xchg
-    movwf ACCEL_Y_L, c
+    movwf ACCEL_Y_L, A
 
     movlw 0x00
     call SPI_Xchg
-    movwf ACCEL_Y_H, c
+    movwf ACCEL_Y_H, A
 
     banksel LATD
     bsf LATD, 0, b      ; CS high
