@@ -3,6 +3,7 @@
 global ACCEL_X_H, ACCEL_X_L, ACCEL_Y_H, ACCEL_Y_L
 global TARGET_X_H, TARGET_X_L, TARGET_Y_H, TARGET_Y_L
 global TOTAL_X_L, TOTAL_X_H, TOTAL_Y_L, TOTAL_Y_H
+global rotate
     
 extrn	DAC_Setup, DAC_Int_Hi
 extrn	Setup_Accel, Read_Accel
@@ -98,112 +99,40 @@ start:
    
     
 loop:
-
-    ; Writes to UART every 256 cycles
-    decfsz UART_counter, A
-    bra skip_UART
+    call move_motor_X
+    call move_motor_Y
+    goto $
     
-    ; For the same 256 cycles, set integration back to 0???
-    ;movlw 0x00
-    ;movwf TOTAL_X_H, A
-    ;movwf TOTAL_X_L, A
-    ;movwf TOTAL_Y_H, A
-   ;movwf TOTAL_Y_L, A
-    
-    movlw 0xFF
-    movwf UART_counter
-    
-    lfsr 2, ACCEL_X_H
-    movlw 0x01
-    call UART_Transmit_Message
-    
-skip_UART:
-    
-    ; Set the current tilt values to the delta values
-    movff ACCEL_X_H, DELTA_X_H
-    movff ACCEL_X_L, DELTA_X_L
-    movff ACCEL_Y_H, DELTA_Y_H
-    movff ACCEL_Y_L, DELTA_Y_L
-    
+rotate:
     call Read_Accel
-    
-    
-    ; Now subtract the NEW tilt values from delta values
-    movf ACCEL_X_L, W, A
-    subwf DELTA_X_L, A
-    
-    movf ACCEL_X_H, W, A
-    subwfb DELTA_X_H, A
-    
-    movf ACCEL_Y_L, W, A
-    subwf DELTA_Y_L, A
-    
-    movf ACCEL_Y_H, W, A
-    subwfb DELTA_Y_H, A
-    
-    
-    ; Add to total tilt values for integration gain
-    ; ONLY IF DELTA A IS SMALL - near equilibrium!
-    
-    tstfsz DELTA_X_H, A
-    bra skip_integration_X
-    
-    movlw 0x70
-    cpfslt TOTAL_X_H, A
-    bra skip_integration_X
-    
-    ; Add small portion of the error to the total
-    ;rrcf ACCEL_X_H
-    
-    ;movf ACCEL_X_L, W, A
-    ;addwf TOTAL_X_L, F
-    
-    ;movf ACCEL_X_H, W, A
-    ;addwfc TOTAL_X_H, F
-    
-skip_integration_X:    
-    
-    tstfsz DELTA_Y_H, A
-    bra skip_integration_Y
-    
-    movlw 0x70
-    cpfslt TOTAL_Y_H, A
-    bra skip_integration_Y
-    
-    movf ACCEL_Y_L, W, A
-    addwf TOTAL_Y_L, F
-    
-    movf ACCEL_Y_H, W, A
-    addwfc TOTAL_Y_H, F
-    
- skip_integration_Y:
 
     
     ; Convert X acceleration into motor servo PWM
     movff ACCEL_X_H, TEMP_H
     movff ACCEL_X_L, TEMP_L
-    movff DELTA_X_H, TEMP_DELTA_H
-    movff DELTA_X_L, TEMP_DELTA_L
-    movff TOTAL_X_H, TEMP_TOTAL_H
-    movff TOTAL_X_L, TEMP_TOTAL_L
     call convert_tilt
-    movff TEMP_H, TARGET_X_H
-    movff TEMP_L, TARGET_X_L
+    movff TEMP_H, ACCEL_X_H
+    movff TEMP_L, ACCEL_X_L
 
     ; Same for Y
     movff ACCEL_Y_H, TEMP_H
     movff ACCEL_Y_L, TEMP_L
-    movff DELTA_Y_H, TEMP_DELTA_H
-    movff DELTA_Y_L, TEMP_DELTA_L
-    movff TOTAL_Y_H, TEMP_TOTAL_H
-    movff TOTAL_Y_L, TEMP_TOTAL_L
     call convert_tilt
-    movff TEMP_H, TARGET_Y_H
-    movff TEMP_L, TARGET_Y_L
-
-    call move_motor_X
-    call move_motor_Y
+    movff TEMP_H, ACCEL_Y_H
+    movff TEMP_L, ACCEL_Y_L
     
+    ; Add converted tilts to the CURRENT PWM SIGNAL
+    movf ACCEL_X_L, W, A
+    addwf TARGET_X_L, F, A
+    
+    movf ACCEL_X_H, W, A
+    addwfc TARGET_X_H, F, A
+    
+    movf ACCEL_Y_L, W, A
+    addwf TARGET_Y_L, F, A
+    
+    movf ACCEL_Y_H, W, A
+    addwfc TARGET_Y_H, F, A
 
     bra loop
     
@@ -213,36 +142,10 @@ convert_tilt:
     ; Shift actual tilt values
     movff TEMP_H, SHIFT_H
     movff TEMP_L, SHIFT_L
-    movlw 0x04
+    movlw 0x03
     call right_shift_W
     movff SHIFT_H, TEMP_H
     movff SHIFT_L, TEMP_L
-    
-    ; Shift delta tilt values
-    movff TEMP_DELTA_H, SHIFT_H
-    movff TEMP_DELTA_L, SHIFT_L
-    movlw 0x04
-    call right_shift_W
-    movff SHIFT_H, TEMP_DELTA_H
-    movff SHIFT_L, TEMP_DELTA_L
-    
-    ; Shift integration values
-    movff TEMP_TOTAL_H, SHIFT_H
-    movff TEMP_TOTAL_L, SHIFT_L
-    movlw 0x00
-    call right_shift_W
-    movff SHIFT_H, TEMP_TOTAL_H
-    movff SHIFT_L, TEMP_TOTAL_L
-    
-    movf DEFAULT_L, W, A
-    addwf TEMP_L, F
-    subwf TEMP_DELTA_L, F
-   ;addwf TEMP_TOTAL_L, F
-
-    movf DEFAULT_H, W, A
-    addwfc TEMP_H, F
-    subwfb TEMP_DELTA_H, F
-    ;addwfc TEMP_TOTAL_H, F
     
     return
     

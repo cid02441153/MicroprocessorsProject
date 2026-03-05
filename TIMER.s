@@ -1,6 +1,7 @@
 #include <xc.inc>
 	
 global	DAC_Setup, DAC_Int_Hi
+extrn	rotate
     
 psect	dac_code, class=CODE
 	
@@ -17,6 +18,8 @@ DAC_Int_Hi:
 	
 	; Give the timer an initial start time
 	call timer_reset
+	
+	call rotate
 	
 	retfie	f		; fast return from interrupt
 	
