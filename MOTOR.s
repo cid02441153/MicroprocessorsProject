@@ -1,6 +1,6 @@
 #include <xc.inc>
 
-global move_motor_X, move_motor_Y
+global move_motor_X, move_motor_Y, centre_motor_X
     
 extrn  TARGET_X_L, TARGET_X_H, TARGET_Y_L, TARGET_Y_H
 
@@ -31,6 +31,19 @@ move_motor_Y:
     return
     
     bcf PORTD, 3, A
+    return
+    
+    
+centre_motor_X:
+    movlw 0x65
+    cpfsgt TMR0L
+    return
+    
+    movlw 0x6F
+    cpfsgt  TMR0H ; compare w and f, skip if greater than 
+    return
+    
+    bcf PORTD, 2, A
     return
 
     end

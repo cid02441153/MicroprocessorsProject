@@ -8,7 +8,7 @@ global MATH_FLAG
 extrn	DAC_Setup, DAC_Int_Hi
 extrn	Setup_Accel, Read_Accel, Read_Gyro
 extrn	UART_Setup, UART_Transmit_Message
-extrn   move_motor_X, move_motor_Y
+extrn   move_motor_X, move_motor_Y, centre_motor_X
     
 psect udata_acs
 SHIFT_H: ds 1
@@ -61,13 +61,13 @@ int_hi:	org	0x0008	; high vector, no low vector
 start:
     
     ; Set Gains
-    movlw 0x06
+    movlw 0x07
     movwf K_p
     
-    movlw 0x06
+    movlw 0x08
     movwf K_d
     
-    movlw 0x08
+    movlw 0xF0
     movwf K_i
     
     ; Initial target is 0 degrees
@@ -85,12 +85,14 @@ start:
     call	UART_Setup
     call	Setup_Accel
     call	DAC_Setup
+    call	delay
     
 loop:
     
     ; COMMENT OUT FOR MAIN CODE
     ; UNCOMMENT FOR INTIIAL MOVEMENT
     ;call init_angle
+    ;bra loop
     
     ; Checks the timer for the motors EVERY LOOP
     call move_motor_X
@@ -107,6 +109,10 @@ loop:
     
     ; Write to UART
     lfsr 2, ACCEL_X_H
+    movlw 0x01
+    call UART_Transmit_Message
+    
+    lfsr 2, TARGET_X_H
     movlw 0x01
     call UART_Transmit_Message
     
