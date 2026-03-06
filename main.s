@@ -2,10 +2,11 @@
     
 global ACCEL_X_H, ACCEL_X_L, ACCEL_Y_H, ACCEL_Y_L
 global TARGET_X_H, TARGET_X_L, TARGET_Y_H, TARGET_Y_L
+global GYRO_X_L, GYRO_X_H, GYRO_Y_L, GYRO_Y_H
 global MATH_FLAG
     
 extrn	DAC_Setup, DAC_Int_Hi
-extrn	Setup_Accel, Read_Accel
+extrn	Setup_Accel, Read_Accel, Read_Gyro
 extrn	UART_Setup, UART_Transmit_Message
 extrn   move_motor_X, move_motor_Y
     
@@ -28,6 +29,12 @@ ACCEL_X_L: ds 1
 ACCEL_X_H: ds 1
 ACCEL_Y_L: ds 1
 ACCEL_Y_H: ds 1
+    
+GYRO_X_L: ds 1
+GYRO_X_H: ds 1
+GYRO_Y_L: ds 1
+GYRO_Y_H: ds 1
+    
 TEMP_H: ds 1
 TEMP_L: ds 1
     
@@ -35,6 +42,14 @@ TEMP_L: ds 1
 MATH_FLAG: ds 1
 counter: ds 1
     
+TOTAL_ERROR_X_L: ds 1 
+TOTAL_ERROR_X_H: ds 1     
+TOTAL_ERROR_Y_L: ds 1 
+TOTAL_ERROR_Y_H: ds 1 
+    
+K_p: ds 1
+K_d: ds 1
+K_i: ds 1
     
 psect	code, abs
 rst:	org	0x0000	; reset vector
@@ -44,6 +59,16 @@ int_hi:	org	0x0008	; high vector, no low vector
 	goto	DAC_Int_Hi
 	
 start:
+    
+    ; Set Gains
+    movlw 0x06
+    movwf K_p
+    
+    movlw 0x06
+    movwf K_d
+    
+    movlw 0x08
+    movwf K_i
     
     ; Initial target is 0 degrees
     movlw 0x6F
@@ -78,38 +103,78 @@ loop:
     
     ; Read the X and Y accelerometer readings
     call Read_Accel
+    call Read_Gyro
     
     ; Write to UART
     lfsr 2, ACCEL_X_H
     movlw 0x01
     call UART_Transmit_Message
     
+    ;INTEGRAL GAIN
     ; Convert X acceleration into motor servo PWM
     movff ACCEL_X_H, TEMP_H
     movff ACCEL_X_L, TEMP_L
+    
+    movlw 0x08 ; Right shift 3 for scale factor, right shift 5 for integration gain
     call convert_tilt
-    movff TEMP_H, ACCEL_X_H
-    movff TEMP_L, ACCEL_X_L
 
     ; Add the converted accelerometer reading to the target - INTEGRATION GAIN
-    movf ACCEL_X_L, W, A
-    addwf TARGET_X_L, F, A
+    movf TEMP_L, W, A
+    addwf TOTAL_ERROR_X_L, F, A
     
-    movf ACCEL_X_H, W, A
-    addwfc TARGET_X_H, F, A
+    movf TEMP_H, W, A
+    addwfc TOTAL_ERROR_X_H, F, A
+    
+    
+    ;PROPORTIONAL GAIN
+    ; Convert X acceleration into motor servo PWM
+    movff ACCEL_X_H, TEMP_H
+    movff ACCEL_X_L, TEMP_L
+    
+    movlw 0x06 ; Right shift 3 for scale factor, right shift 5 for integration gain
+    call convert_tilt
+
+    ; Add the converted accelerometer reading to the target - INTEGRATION GAIN
+    movf TEMP_L, W, A
+    addwf TOTAL_ERROR_X_L, W, A
+    movwf TARGET_X_L, A 
+    
+    movf TEMP_H, W, A
+    addwfc TOTAL_ERROR_X_H, W, A
+    movwf TARGET_X_H, A 
+    
+    
+    
+    ;DERIVATIVE GAIN
+    ; Convert X acceleration into motor servo PWM
+    movff GYRO_X_H, TEMP_H
+    movff GYRO_X_L, TEMP_L
+    
+    movlw 0x06 ; Right shift 3 for scale factor, right shift 5 for integration gain
+    call convert_tilt
+
+    ; Add the converted accelerometer reading to the target - INTEGRATION GAIN
+    movf TEMP_L, W, A
+    subwf TARGET_X_L, F, A
+    
+    movf TEMP_H, W, A
+    subwfb TARGET_X_H, F, A
     
     ; Do the same for the Y servo
     movff ACCEL_Y_H, TEMP_H
     movff ACCEL_Y_L, TEMP_L
+    
+    movlw 0x00 ; Right shift 3 for scale factor, right shift 5 for integration gain
     call convert_tilt
+    
     movff TEMP_H, ACCEL_Y_H
     movff TEMP_L, ACCEL_Y_L
 
     movf ACCEL_Y_L, W, A
-    addwf TARGET_Y_L, F, A
+    addwf TOTAL_ERROR_Y_L, F, A
     
     movf ACCEL_Y_H, W, A
-    addwfc TARGET_Y_H, F, A
+    addwfc TOTAL_ERROR_Y_H, F, A
 
     ; Infinite loop
     bra loop
@@ -135,7 +200,7 @@ convert_tilt:
     ; Shift actual tilt values
     movff TEMP_H, SHIFT_H
     movff TEMP_L, SHIFT_L
-    movlw 0x08 ; Right shift 3 for scale factor, right shift 5 for integration gain
+    
     call right_shift_W
     movff SHIFT_H, TEMP_H
     movff SHIFT_L, TEMP_L

@@ -1,7 +1,8 @@
 #include <xc.inc>
 
-global Setup_Accel, Read_Accel
+global Setup_Accel, Read_Accel, Read_Gyro
 extrn  ACCEL_X_L, ACCEL_X_H, ACCEL_Y_L, ACCEL_Y_H
+extrn  GYRO_X_L, GYRO_X_H, GYRO_Y_L, GYRO_Y_H
 
 psect accel_code, class=CODE
 
@@ -23,6 +24,7 @@ Setup_Accel:
     movwf SSP2CON1, b
 
     call Wake_Accel
+    call Wake_Gyro
     call Enable_Increment
     
     banksel 0
@@ -33,6 +35,19 @@ Wake_Accel:
     bcf LATD, 0, b      ; CS low
 
     movlw 0x20
+    call SPI_Xchg       ; CTRL_REG6_XL
+    movlw 0x60
+    call SPI_Xchg       ; 119Hz, +-2g
+
+    banksel LATD
+    bsf LATD, 0, b      ; CS high
+    return
+
+Wake_Gyro:
+    banksel LATD
+    bcf LATD, 0, b      ; CS low
+
+    movlw 0x10
     call SPI_Xchg       ; CTRL_REG6_XL
     movlw 0x60
     call SPI_Xchg       ; 119Hz, +-2g
@@ -76,6 +91,35 @@ Read_Accel:
     movlw 0x00
     call SPI_Xchg
     movwf ACCEL_Y_H, A
+
+    banksel LATD
+    bsf LATD, 0, b      ; CS high
+    
+    banksel 0
+    return
+    
+ Read_Gyro:
+    banksel LATD
+    bcf LATD, 0, b      ; CS low
+
+    movlw 0x98          ; read | auto-increment | reg 0x28
+    call SPI_Xchg
+
+    movlw 0x00
+    call SPI_Xchg
+    movwf GYRO_X_L, A
+
+    movlw 0x00
+    call SPI_Xchg
+    movwf GYRO_X_H, A
+
+    movlw 0x00
+    call SPI_Xchg
+    movwf GYRO_Y_L, A
+
+    movlw 0x00
+    call SPI_Xchg
+    movwf GYRO_Y_H, A
 
     banksel LATD
     bsf LATD, 0, b      ; CS high
