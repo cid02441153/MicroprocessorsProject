@@ -61,13 +61,13 @@ int_hi:	org	0x0008	; high vector, no low vector
 start:
     
     ; Set Gains
-    movlw 0x07
+    movlw 0x06
     movwf K_p
     
-    movlw 0x08
+    movlw 0x04
     movwf K_d
     
-    movlw 0xF0
+    movlw 0xEF
     movwf K_i
     
     ; Initial target is 0 degrees
@@ -76,6 +76,24 @@ start:
     
     movlw 0x65
     movwf TARGET_X_L, A
+    
+    ; Initial target is 0 degrees
+    movlw 0x6F
+    movwf TARGET_Y_H, A
+    
+    movlw 0x65
+    movwf TARGET_Y_L, A
+    
+    ; --- INITIALISE ERROR ---
+    movlw 0x6F
+    movwf TOTAL_ERROR_X_H, A
+    movlw 0x65
+    movwf TOTAL_ERROR_X_L, A
+    
+    movlw 0x6F
+    movwf TOTAL_ERROR_Y_H, A
+    movlw 0x65
+    movwf TOTAL_ERROR_Y_L, A
    
     ; Clear Port D for Output
     clrf TRISD, A
@@ -116,71 +134,111 @@ loop:
     movlw 0x01
     call UART_Transmit_Message
     
-    ;INTEGRAL GAIN
-    ; Convert X acceleration into motor servo PWM
+    ; ==============================
+    ; X-AXIS PID CALCULATIONS
+    ; ==============================
+
+    ; --- INTEGRAL GAIN X ---
     movff ACCEL_X_H, TEMP_H
     movff ACCEL_X_L, TEMP_L
-    
-    movlw 0x08 ; Right shift 3 for scale factor, right shift 5 for integration gain
+    movlw 0x08 
     call convert_tilt
 
-    ; Add the converted accelerometer reading to the target - INTEGRATION GAIN
+    ; Subtract the converted accelerometer reading
     movf TEMP_L, W, A
-    addwf TOTAL_ERROR_X_L, F, A
-    
+    subwf TOTAL_ERROR_X_L, F, A
     movf TEMP_H, W, A
-    addwfc TOTAL_ERROR_X_H, F, A
+    subwfb TOTAL_ERROR_X_H, F, A
     
-    
-    ;PROPORTIONAL GAIN
-    ; Convert X acceleration into motor servo PWM
+    ; --- PROPORTIONAL GAIN X ---
     movff ACCEL_X_H, TEMP_H
     movff ACCEL_X_L, TEMP_L
-    
-    movlw 0x06 ; Right shift 3 for scale factor, right shift 5 for integration gain
+    movlw 0x06 
     call convert_tilt
 
-    ; Add the converted accelerometer reading to the target - INTEGRATION GAIN
+    ; Subtract the proportional term from the total error
     movf TEMP_L, W, A
     addwf TOTAL_ERROR_X_L, W, A
     movwf TARGET_X_L, A 
-    
     movf TEMP_H, W, A
     addwfc TOTAL_ERROR_X_H, W, A
     movwf TARGET_X_H, A 
     
-    
-    
-    ;DERIVATIVE GAIN
-    ; Convert X acceleration into motor servo PWM
+    ; --- DERIVATIVE GAIN X ---
     movff GYRO_X_H, TEMP_H
     movff GYRO_X_L, TEMP_L
-    
-    movlw 0x06 ; Right shift 3 for scale factor, right shift 5 for integration gain
+    movlw 0x06 
     call convert_tilt
 
-    ; Add the converted accelerometer reading to the target - INTEGRATION GAIN
+    ; Add the gyro damping term
     movf TEMP_L, W, A
     subwf TARGET_X_L, F, A
-    
     movf TEMP_H, W, A
     subwfb TARGET_X_H, F, A
     
-    ; Do the same for the Y servo
+    ; --- COMPARE WITH MAX/MIN VALUES
+    ; Max = 0x7765, Min = 0x6765
+    movlw 0x77
+    cpfsgt TARGET_X_H, A
+    movwf TARGET_X_H, A
+    
+    movlw 0x68
+    cpfslt TARGET_X_H, A
+    movwf TARGET_X_H, A
+    
+    
+    ; ==============================
+    ; Y-AXIS PID CALCULATIONS
+    ; ==============================
+
+    ; --- INTEGRAL GAIN Y ---
     movff ACCEL_Y_H, TEMP_H
     movff ACCEL_Y_L, TEMP_L
-    
-    movlw 0x00 ; Right shift 3 for scale factor, right shift 5 for integration gain
+    movlw 0x08 
     call convert_tilt
-    
-    movff TEMP_H, ACCEL_Y_H
-    movff TEMP_L, ACCEL_Y_L
 
-    movf ACCEL_Y_L, W, A
+    ; Subtract the converted accelerometer reading
+    movf TEMP_L, W, A
     addwf TOTAL_ERROR_Y_L, F, A
-    
-    movf ACCEL_Y_H, W, A
+    movf TEMP_H, W, A
     addwfc TOTAL_ERROR_Y_H, F, A
+    
+    ; --- PROPORTIONAL GAIN Y ---
+    movff ACCEL_Y_H, TEMP_H
+    movff ACCEL_Y_L, TEMP_L
+    movlw 0x06 
+    call convert_tilt
+
+    ; Subtract the proportional term from the total error
+    movf TEMP_L, W, A
+    addwf TOTAL_ERROR_Y_L, W, A
+    movwf TARGET_Y_L, A 
+    movf TEMP_H, W, A
+    addwfc TOTAL_ERROR_Y_H, W, A
+    movwf TARGET_Y_H, A 
+    
+    ; --- DERIVATIVE GAIN Y ---
+    movff GYRO_Y_H, TEMP_H
+    movff GYRO_Y_L, TEMP_L
+    movlw 0x06 
+    call convert_tilt
+
+    ; Add the gyro damping term
+    movf TEMP_L, W, A
+    subwf TARGET_Y_L, F, A
+    movf TEMP_H, W, A
+    subwfb TARGET_Y_H, F, A
+    
+    ; --- COMPARE WITH MAX/MIN VALUES
+    ; Max = 0x7765, Min = 0x6765
+    movlw 0x77
+    cpfsgt TARGET_Y_H, A
+    movwf TARGET_Y_H, A
+    
+    movlw 0x68
+    cpfslt TARGET_Y_H, A
+    movwf TARGET_Y_H, A
+
 
     ; Infinite loop
     bra loop
