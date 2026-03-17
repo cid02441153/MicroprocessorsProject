@@ -66,13 +66,13 @@ int_hi:	org	0x0008	; high vector, no low vector
 start:
     
     ; Set Gains
-    movlw 0x06
+    movlw 0x05
     movwf K_p
     
     movlw 0x06
     movwf K_d
     
-    movlw 0x08
+    movlw 0x09
     movwf K_i
     
     ; Initial target is 0 degrees
@@ -89,17 +89,17 @@ start:
     movlw 0x65
     movwf TARGET_Y_L, A
     
-    ; --- INITIALISE ERROR ---
-    movlw 0x6F
+    ; Initialize Total Error to act as the "Center" base PWM
+    movlw 0x6F         ; X-Axis Center High Byte (based on your init code)
     movwf TOTAL_ERROR_X_H, A
-    movlw 0x65
+    movlw 0x65          ; X-Axis Center Low Byte
     movwf TOTAL_ERROR_X_L, A
-    
-    movlw 0x6F
+
+    movlw 0x6F          ; Y-Axis Center High Byte
     movwf TOTAL_ERROR_Y_H, A
-    movlw 0x65
+    movlw 0x65          ; Y-Axis Center Low Byte
     movwf TOTAL_ERROR_Y_L, A
-   
+    
     ; Clear Port D for Output
     clrf TRISD, A
     clrf LATD
@@ -141,12 +141,42 @@ loop:
     movf K_i, W, A 
     call convert_tilt
 
-    ; Subtract the converted accelerometer reading
-    ; Subtract = move motor in opposite direction to the error
+    ; =========================================
+    ; --- ANTI-WINDUP LOGIC ---
+    ; =========================================
+
+    ; --- 1. CHECK CEILING (Max) ---
+    movlw 0x77
+    cpfslt TARGET_X_H, A     ; If Target < 0x76, ceiling is fine, check floor
+    bra check_ceiling_sign_x   ; Target >= 0x76! Check if we should block it
+    bra check_floor_x          ; Target is safe from ceiling, jump to floor check
+
+check_ceiling_sign_x:
+    btfss TEMP_H, 7          ; Is the error positive? (Bit 7 == 0)
+    bra skip_x               ; YES: It will make saturation worse. SKIP MATH!
+    bra do_integration_x       ; NO: It will help us recover. ALLOW MATH!
+
+    ; --- 2. CHECK FLOOR (Min) ---
+check_floor_x:
+    movlw 0x68               ; (Using 0x68 as your floor limit)
+    cpfsgt TARGET_X_H, A     ; If Target > 0x68, floor is fine, do math
+    bra check_floor_sign_x    ; Target <= 0x68! Check if we should block it
+    bra do_integration_x       ; Target is safe, proceed to math
+
+check_floor_sign_x:
+    btfsc TEMP_H, 7          ; Is the error negative? (Bit 7 == 1)
+    bra skip_x               ; YES: It will make saturation worse. SKIP MATH!
+    ; Fall through to do_integration
+
+    ; =========================================
+    ; --- INTEGRAL MATH ---
+    ; =========================================
+do_integration_x:
     movf TEMP_L, W, A
-    subwf TOTAL_ERROR_X_L, F, A
+    addwf TOTAL_ERROR_X_L, F, A
     movf TEMP_H, W, A
-    subwfb TOTAL_ERROR_X_H, F, A
+    addwfc TOTAL_ERROR_X_H, F, A
+skip_x:
    
     ; --- PROPORTIONAL GAIN X ---
     movff ACCEL_X_H, TEMP_H
@@ -195,12 +225,46 @@ loop:
     movf K_i, W, A 
     call convert_tilt
 
-    ; Subtract the converted accelerometer reading
+    ; =========================================
+    ; --- ANTI-WINDUP LOGIC ---
+    ; =========================================
+
+    ; --- 1. CHECK CEILING (Max) ---
+    movlw 0x76 
+    cpfslt TARGET_Y_H, A     ; If Target < 0x76, ceiling is fine, check floor
+    bra check_ceiling_sign   ; Target >= 0x76! Check if we should block it
+    bra check_floor          ; Target is safe from ceiling, jump to floor check
+
+check_ceiling_sign:
+    btfss TEMP_H, 7          ; Is the error positive? (Bit 7 == 0)
+    bra skip_y               ; YES: It will make saturation worse. SKIP MATH!
+    bra do_integration       ; NO: It will help us recover. ALLOW MATH!
+
+    ; --- 2. CHECK FLOOR (Min) ---
+check_floor:
+    movlw 0x68               ; (Using 0x68 as your floor limit)
+    cpfsgt TARGET_Y_H, A     ; If Target > 0x68, floor is fine, do math
+    bra check_floor_sign     ; Target <= 0x68! Check if we should block it
+    bra do_integration       ; Target is safe, proceed to math
+
+check_floor_sign:
+    btfsc TEMP_H, 7          ; Is the error negative? (Bit 7 == 1)
+    bra skip_y               ; YES: It will make saturation worse. SKIP MATH!
+    ; Fall through to do_integration
+
+    ; =========================================
+    ; --- INTEGRAL MATH ---
+    ; =========================================
+do_integration:
     movf TEMP_L, W, A
     addwf TOTAL_ERROR_Y_L, F, A
     movf TEMP_H, W, A
     addwfc TOTAL_ERROR_Y_H, F, A
+skip_y:
     
+    
+
+
     ; --- PROPORTIONAL GAIN Y ---
     movff ACCEL_Y_H, TEMP_H
     movff ACCEL_Y_L, TEMP_L
@@ -229,13 +293,13 @@ loop:
     
     ; --- COMPARE WITH MAX/MIN VALUES
     ; Max = 0x7765, Min = 0x6765
-    ;movlw 0x77
-    ;cpfsgt TARGET_Y_H, A
-    ;movwf TARGET_Y_H, A
+    movlw 0x76
+    cpfslt TARGET_Y_H, A
+    movwf TARGET_Y_H, A
     
-    ;movlw 0x68
-    ;cpfslt TARGET_Y_H, A
-    ;movwf TARGET_Y_H, A
+    movlw 0x69
+    cpfsgt TARGET_Y_H, A
+    movwf TARGET_Y_H, A
 
 
     ; Infinite loop
