@@ -18,7 +18,7 @@ delay_count: ds 1
 delay_count_2: ds 1
 delay_count_3: ds 1
     
-; Variables for PWM signal
+; Variables for PWM signal to compare to timer0
 TARGET_X_L: ds 1
 TARGET_X_H: ds 1
 TARGET_Y_L: ds 1
@@ -30,23 +30,28 @@ ACCEL_X_H: ds 1
 ACCEL_Y_L: ds 1
 ACCEL_Y_H: ds 1
     
-GYRO_X_L: ds 1
-GYRO_X_H: ds 1
-GYRO_Y_L: ds 1
-GYRO_Y_H: ds 1
-    
-TEMP_H: ds 1
-TEMP_L: ds 1
-    
-; Flag for interrupt
-MATH_FLAG: ds 1
-counter: ds 1
-    
+; Total error (cumulative distance from 0) for integral gain
 TOTAL_ERROR_X_L: ds 1 
 TOTAL_ERROR_X_H: ds 1     
 TOTAL_ERROR_Y_L: ds 1 
 TOTAL_ERROR_Y_H: ds 1 
     
+; Gyro values (speed of rotation) for derivative gain
+GYRO_X_L: ds 1
+GYRO_X_H: ds 1
+GYRO_Y_L: ds 1
+GYRO_Y_H: ds 1
+    
+; Temp variables so that routines can be used for both X and Y
+TEMP_H: ds 1
+TEMP_L: ds 1
+    
+; Flag for interrupt
+MATH_FLAG: ds 1
+    
+counter: ds 1
+    
+; PID Gain Values    
 K_p: ds 1
 K_d: ds 1
 K_i: ds 1
@@ -64,10 +69,10 @@ start:
     movlw 0x06
     movwf K_p
     
-    movlw 0x04
+    movlw 0x06
     movwf K_d
     
-    movlw 0xEF
+    movlw 0x08
     movwf K_i
     
     ; Initial target is 0 degrees
@@ -105,18 +110,14 @@ start:
     call	DAC_Setup
     call	delay
     
-loop:
-    
-    ; COMMENT OUT FOR MAIN CODE
-    ; UNCOMMENT FOR INTIIAL MOVEMENT
-    ;call init_angle
-    ;bra loop
+loop: 
     
     ; Checks the timer for the motors EVERY LOOP
     call move_motor_X
     call move_motor_Y
     
     ; Only does the accelerometer maths once per interrupt (20ms cycle)
+    ; MATH_FLAG gets set to one each time timer0 interrupts
     btfss MATH_FLAG, 0
     bra loop
     bcf MATH_FLAG, 0
@@ -130,10 +131,6 @@ loop:
     movlw 0x01
     call UART_Transmit_Message
     
-    lfsr 2, TARGET_X_H
-    movlw 0x01
-    call UART_Transmit_Message
-    
     ; ==============================
     ; X-AXIS PID CALCULATIONS
     ; ==============================
@@ -141,19 +138,20 @@ loop:
     ; --- INTEGRAL GAIN X ---
     movff ACCEL_X_H, TEMP_H
     movff ACCEL_X_L, TEMP_L
-    movlw 0x08 
+    movf K_i, W, A 
     call convert_tilt
 
     ; Subtract the converted accelerometer reading
+    ; Subtract = move motor in opposite direction to the error
     movf TEMP_L, W, A
     subwf TOTAL_ERROR_X_L, F, A
     movf TEMP_H, W, A
     subwfb TOTAL_ERROR_X_H, F, A
-    
+   
     ; --- PROPORTIONAL GAIN X ---
     movff ACCEL_X_H, TEMP_H
     movff ACCEL_X_L, TEMP_L
-    movlw 0x06 
+    movf K_p, W, A 
     call convert_tilt
 
     ; Subtract the proportional term from the total error
@@ -167,7 +165,7 @@ loop:
     ; --- DERIVATIVE GAIN X ---
     movff GYRO_X_H, TEMP_H
     movff GYRO_X_L, TEMP_L
-    movlw 0x06 
+    movf K_d, W, A
     call convert_tilt
 
     ; Add the gyro damping term
@@ -178,13 +176,13 @@ loop:
     
     ; --- COMPARE WITH MAX/MIN VALUES
     ; Max = 0x7765, Min = 0x6765
-    movlw 0x77
-    cpfsgt TARGET_X_H, A
-    movwf TARGET_X_H, A
+    ;movlw 0x77
+    ;cpfsgt TARGET_X_H, A
+    ;movwf TARGET_X_H, A
     
-    movlw 0x68
-    cpfslt TARGET_X_H, A
-    movwf TARGET_X_H, A
+    ;movlw 0x68
+    ;cpfslt TARGET_X_H, A
+    ;movwf TARGET_X_H, A
     
     
     ; ==============================
@@ -194,7 +192,7 @@ loop:
     ; --- INTEGRAL GAIN Y ---
     movff ACCEL_Y_H, TEMP_H
     movff ACCEL_Y_L, TEMP_L
-    movlw 0x08 
+    movf K_i, W, A 
     call convert_tilt
 
     ; Subtract the converted accelerometer reading
@@ -206,7 +204,7 @@ loop:
     ; --- PROPORTIONAL GAIN Y ---
     movff ACCEL_Y_H, TEMP_H
     movff ACCEL_Y_L, TEMP_L
-    movlw 0x06 
+    movf K_p, W, A
     call convert_tilt
 
     ; Subtract the proportional term from the total error
@@ -220,7 +218,7 @@ loop:
     ; --- DERIVATIVE GAIN Y ---
     movff GYRO_Y_H, TEMP_H
     movff GYRO_Y_L, TEMP_L
-    movlw 0x06 
+    movf K_d, W, A
     call convert_tilt
 
     ; Add the gyro damping term
@@ -231,13 +229,13 @@ loop:
     
     ; --- COMPARE WITH MAX/MIN VALUES
     ; Max = 0x7765, Min = 0x6765
-    movlw 0x77
-    cpfsgt TARGET_Y_H, A
-    movwf TARGET_Y_H, A
+    ;movlw 0x77
+    ;cpfsgt TARGET_Y_H, A
+    ;movwf TARGET_Y_H, A
     
-    movlw 0x68
-    cpfslt TARGET_Y_H, A
-    movwf TARGET_Y_H, A
+    ;movlw 0x68
+    ;cpfslt TARGET_Y_H, A
+    ;movwf TARGET_Y_H, A
 
 
     ; Infinite loop
@@ -246,7 +244,7 @@ loop:
 
 ; Set an initial angle for the servo for testing
 init_angle:
-    movlw 0x69
+    movlw 0x80
     movwf TARGET_X_H, A
     
     movlw 0x00
