@@ -66,10 +66,10 @@ int_hi:	org	0x0008	; high vector, no low vector
 start:
     
     ; Set Gains
-    movlw 0x06
+    movlw 0x04
     movwf K_p
     
-    movlw 0x06
+    movlw 0x04
     movwf K_d
     
     movlw 0x08
@@ -156,10 +156,10 @@ loop:
 
     ; Subtract the proportional term from the total error
     movf TEMP_L, W, A
-    addwf TOTAL_ERROR_X_L, W, A
+    subwf TOTAL_ERROR_X_L, W, A
     movwf TARGET_X_L, A 
     movf TEMP_H, W, A
-    addwfc TOTAL_ERROR_X_H, W, A
+    subwfb TOTAL_ERROR_X_H, W, A
     movwf TARGET_X_H, A 
     
     ; --- DERIVATIVE GAIN X ---
@@ -170,19 +170,9 @@ loop:
 
     ; Add the gyro damping term
     movf TEMP_L, W, A
-    subwf TARGET_X_L, F, A
+    addwf TARGET_X_L, F, A
     movf TEMP_H, W, A
-    subwfb TARGET_X_H, F, A
-    
-    ; --- COMPARE WITH MAX/MIN VALUES
-    ; Max = 0x7765, Min = 0x6765
-    ;movlw 0x77
-    ;cpfsgt TARGET_X_H, A
-    ;movwf TARGET_X_H, A
-    
-    ;movlw 0x68
-    ;cpfslt TARGET_X_H, A
-    ;movwf TARGET_X_H, A
+    addwfc TARGET_X_H, F, A
     
     
     ; ==============================
@@ -226,17 +216,6 @@ loop:
     subwf TARGET_Y_L, F, A
     movf TEMP_H, W, A
     subwfb TARGET_Y_H, F, A
-    
-    ; --- COMPARE WITH MAX/MIN VALUES
-    ; Max = 0x7765, Min = 0x6765
-    ;movlw 0x77
-    ;cpfsgt TARGET_Y_H, A
-    ;movwf TARGET_Y_H, A
-    
-    ;movlw 0x68
-    ;cpfslt TARGET_Y_H, A
-    ;movwf TARGET_Y_H, A
-
 
     ; Infinite loop
     bra loop
@@ -262,7 +241,6 @@ convert_tilt:
     ; Shift actual tilt values
     movff TEMP_H, SHIFT_H
     movff TEMP_L, SHIFT_L
-    
     call right_shift_W
     movff SHIFT_H, TEMP_H
     movff SHIFT_L, TEMP_L
@@ -270,7 +248,9 @@ convert_tilt:
     return
     
 right_shift_W: ; Amount is stored in W
-    movwf counter
+    movwf counter, A
+    movf counter, F, a
+    bz shift_zero
 shift_loop:
     ; Clear carry bit
     bcf	STATUS, 0
@@ -287,6 +267,13 @@ shift_loop:
     decfsz counter, F
     bra shift_loop
     
+    return
+    
+shift_zero:
+    ; Gain = 0, so set shift variables to zero
+    movlw 0x00
+    movwf SHIFT_H, A
+    movwf SHIFT_L, A
     return
     
 ; BIG delay
