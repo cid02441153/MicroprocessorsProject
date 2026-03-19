@@ -9,6 +9,8 @@ psect motor_code, class=CODE
     
 move_motor_X:
     
+    
+    
     movlw 0x77
     cpfslt TARGET_X_H, A 
     bra clamp_max_X
@@ -39,7 +41,7 @@ clamp_done_X:
     subwf TMR0L, W, A
     
     movf TARGET_X_H, W, A
-    subwf TMR0H, W, A
+    subwfb TMR0H, W, A
     
     bc turn_off_X 
     
@@ -82,7 +84,7 @@ clamp_done_Y:
     subwf TMR0L, W, A
     
     movf TARGET_Y_H, W, A
-    subwf TMR0H, W, A
+    subwfb TMR0H, W, A
     
     bc turn_off_Y 
     

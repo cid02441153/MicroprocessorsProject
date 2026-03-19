@@ -1,7 +1,7 @@
 #include <xc.inc>
 	
 global	DAC_Setup, DAC_Int_Hi
-extrn MATH_FLAG    
+extrn MATH_FLAG
 
 psect	dac_code, class=CODE
 	

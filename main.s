@@ -51,10 +51,13 @@ MATH_FLAG: ds 1
     
 counter: ds 1
     
-; PID Gain Values    
-K_p: ds 1
-K_d: ds 1
-K_i: ds 1
+K_p_x: ds 1
+K_i_x: ds 1
+K_d_x: ds 1
+K_p_y: ds 1
+K_i_y: ds 1
+K_d_y: ds 1
+    
     
 psect	code, abs
 rst:	org	0x0000	; reset vector
@@ -65,15 +68,25 @@ int_hi:	org	0x0008	; high vector, no low vector
 	
 start:
     
-    ; Set Gains
     movlw 0x06
-    movwf K_p
+    movwf K_p_x, A
     
-    movlw 0x0B
-    movwf K_d
+    movlw 0x08
+    movwf K_i_x, A
     
-    movlw 0x07
-    movwf K_i
+    movlw 0x09
+    movwf K_d_x, A
+    
+    movlw 0x06
+    movwf K_p_y, A
+    
+    movlw 0x08
+    movwf K_i_y, A
+    
+    movlw 0x09
+    movwf K_d_y, A
+    
+ 
     
     ; Initial target is 0 degrees
     movlw 0x6F
@@ -113,7 +126,11 @@ start:
 loop: 
     
     ; Checks the timer for the motors EVERY LOOP
+    
+    btfsc PORTD, 2
     call move_motor_X
+    
+    btfsc PORTD, 3
     call move_motor_Y
     
     ; Only does the accelerometer maths once per interrupt (20ms cycle)
@@ -138,7 +155,7 @@ loop:
     ; --- INTEGRAL GAIN X ---
     movff ACCEL_X_H, TEMP_H
     movff ACCEL_X_L, TEMP_L
-    movf K_i, W, A 
+    movf K_i_x, W, A 
     call convert_tilt
 
     ; Subtract the converted accelerometer reading
@@ -176,7 +193,7 @@ clamp_done_X:
     ; --- PROPORTIONAL GAIN X ---
     movff ACCEL_X_H, TEMP_H
     movff ACCEL_X_L, TEMP_L
-    movf K_p, W, A 
+    movf K_p_x, W, A 
     call convert_tilt
 
     ; Subtract the proportional term from the total error
@@ -190,7 +207,7 @@ clamp_done_X:
     ; --- DERIVATIVE GAIN X ---
     movff GYRO_X_H, TEMP_H
     movff GYRO_X_L, TEMP_L
-    movf K_d, W, A
+    movf K_d_x, W, A
     call convert_tilt
 
     ; Add the gyro damping term
@@ -208,7 +225,7 @@ clamp_done_X:
     movff ACCEL_Y_H, TEMP_H
     movff ACCEL_Y_L, TEMP_L
     
-    movf K_i, W, A 
+    movf K_i_y, W, A 
     call convert_tilt
 
     ; Subtract the converted accelerometer reading
@@ -247,7 +264,7 @@ clamp_done_Y:
     ; --- PROPORTIONAL GAIN Y ---
     movff ACCEL_Y_H, TEMP_H
     movff ACCEL_Y_L, TEMP_L
-    movf K_p, W, A
+    movf K_p_y, W, A
     call convert_tilt
 
     ; Subtract the proportional term from the total error
@@ -261,7 +278,7 @@ clamp_done_Y:
     ; --- DERIVATIVE GAIN Y ---
     movff GYRO_Y_H, TEMP_H
     movff GYRO_Y_L, TEMP_L
-    movf K_d, W, A
+    movf K_d_y, W, A
     call convert_tilt
 
     ; Add the gyro damping term
