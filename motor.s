@@ -1,6 +1,6 @@
 #include <xc.inc>
 
-global move_motor_X, move_motor_Y
+global move_motor_X, move_motor_Y, init_angle
     
 extrn  TARGET_X_L, TARGET_X_H, TARGET_Y_L, TARGET_Y_H
 
@@ -8,8 +8,6 @@ extrn  TARGET_X_L, TARGET_X_H, TARGET_Y_L, TARGET_Y_H
 psect motor_code, class=CODE
     
 move_motor_X:
-    
-    
     
     movlw 0x77
     cpfslt TARGET_X_H, A 
@@ -94,4 +92,23 @@ turn_off_Y:
     bcf PORTD, 3, A
     return
 
+   
+; Set an initial angle for the servo for testing
+init_angle:
+    ; Max angle = 0x7700
+    ; Min angle = 0x6800
+    movlw 0x68
+    movwf TARGET_X_H, A
+    
+    movlw 0x00
+    movwf TARGET_X_L, A
+   
+    movlw 0x68
+    movwf TARGET_Y_H, A
+   
+    movlw 0x00
+    movwf TARGET_Y_L, A
+    
+    return
+    
     end

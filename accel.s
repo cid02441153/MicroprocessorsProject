@@ -1,8 +1,21 @@
 #include <xc.inc>
 
 global Setup_Accel, Read_Accel, Read_Gyro
-extrn  ACCEL_X_L, ACCEL_X_H, ACCEL_Y_L, ACCEL_Y_H
-extrn  GYRO_X_L, GYRO_X_H, GYRO_Y_L, GYRO_Y_H
+global  ACCEL_X_L, ACCEL_X_H, ACCEL_Y_L, ACCEL_Y_H
+global  GYRO_X_L, GYRO_X_H, GYRO_Y_L, GYRO_Y_H
+    
+psect udata_acs
+; Tilt values (distance from 0) for potential gain
+ACCEL_X_L: ds 1
+ACCEL_X_H: ds 1
+ACCEL_Y_L: ds 1
+ACCEL_Y_H: ds 1
+    
+; Gyro values (speed of rotation) for derivative gain
+GYRO_X_L: ds 1
+GYRO_X_H: ds 1
+GYRO_Y_L: ds 1
+GYRO_Y_H: ds 1
 
 psect accel_code, class=CODE
 
