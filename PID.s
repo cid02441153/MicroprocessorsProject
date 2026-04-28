@@ -46,18 +46,18 @@ counter: ds 1
 psect pid_code, class=CODE
 initialise_PID:
     ; --- INITIALISE PID VALUES ---
-    movlw 0x00
+    movlw 0x04
     movwf K_p_x, A
-    movlw 0x07
+    movlw 0x03
     movwf K_i_x, A
     movlw 0x07
     movwf K_d_x, A
     
-    movlw 0x00
+    movlw 0x03
     movwf K_p_y, A
-    movlw 0x07
+    movlw 0x01
     movwf K_i_y, A
-    movlw 0x07
+    movlw 0x08
     movwf K_d_y, A
     
     ; --- INITIALISE DEFAULT POSITION ---
